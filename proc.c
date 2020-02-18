@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "processes_info.h"
 
 struct {
   struct spinlock lock;
@@ -199,6 +200,9 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+
+  np->tickets = curproc->tickets;
+  np->times_scheduled = curproc->times_scheduled;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -532,3 +536,48 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+int settickets(int tickets) {
+  acquire(&ptable.lock);
+  myproc()->tickets = tickets;
+  release(&ptable.lock);
+  return tickets;
+}
+
+int getprocessesinfo(struct processes_info *p) {
+  acquire(&ptable.lock);
+  struct proc *tmp;
+  p->num_processes = 0;
+  for(tmp = ptable.proc; tmp != &(ptable.proc[NPROC]); tmp++) {
+    if(tmp->state != UNUSED) {
+      p->times_scheduled[p->num_processes] = tmp->times_scheduled; //times_scheduled was ticks, might not fix error
+      p->tickets[p->num_processes] = tmp->tickets;
+      p->pids[p->num_processes] = tmp->pid;
+    }
+    
+  }
+  release(&ptable.lock);
+  return 0;
+}
+
+
+struct proc*
+getcurrentproc(int pid) {
+  struct proc *p;
+  acquire(&ptable.lock);
+  p = ptable.proc;
+  while(p < &ptable.proc[NPROC]) {
+    if(p->state == UNUSED) {
+      continue;
+    }
+    else if (p->pid == pid) {
+      break;
+    }
+    else {
+      p++;
+    }
+  }
+  release(&ptable.lock);
+  return p;
+}
+
